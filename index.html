@@ -1,0 +1,562 @@
+```html
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Well-Tegra Data Solutions: Integrated Platform Demo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f8f7f4;
+      color: #1a202c;
+      position: relative;
+      min-height: 100vh;
+      z-index: 1;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 300px;
+      height: auto;
+      background-image: url('watermark.jpg');
+      background-repeat: no-repeat;
+      background-size: contain;
+      opacity: 0.1;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .nav-link {
+      transition: color 0.3s, border-bottom-color 0.3s;
+      border-bottom: 2px solid transparent;
+    }
+    .nav-link.active,
+    .nav-link:hover {
+      color: #0d9488;
+      border-bottom-color: #0d9488;
+    }
+    .card {
+      background-color: white;
+      border-radius: 0.75rem;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1),
+        0 2px 4px -2px rgb(0 0 0 / 0.1);
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+    .card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1),
+        0 4px 6px -4px rgb(0 0 0 / 0.1);
+    }
+    .chart-container {
+      position: relative;
+      width: 100%;
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+      height: 400px;
+      max-height: 50vh;
+    }
+    @media (min-width: 768px) {
+      .chart-container {
+        height: 450px;
+      }
+    }
+    .kpi-card {
+      border-left: 4px solid #0d9488;
+    }
+    .slider-track {
+      width: 100%;
+      height: 8px;
+      cursor: pointer;
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    .competitor-tab.active {
+      background-color: #0d9488;
+      color: white;
+    }
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      transition: opacity 0.3s ease;
+    }
+    .modal-container {
+      background-color: white;
+      border-radius: 0.75rem;
+      box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1),
+        0 8px 10px -6px rgb(0 0 0 / 0.1);
+      width: 90%;
+      max-width: 4xl;
+      max-height: 90vh;
+      overflow-y: auto;
+      transform: scale(0.95);
+      transition: transform 0.3s ease;
+    }
+    .modal-overlay.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .modal-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .modal-overlay.visible .modal-container {
+      transform: scale(1);
+    }
+    .risk-low {
+      background-color: #dcfce7;
+      color: #166534;
+    }
+    .risk-medium {
+      background-color: #fef9c3;
+      color: #854d0e;
+    }
+    .risk-high {
+      background-color: #fee2e2;
+      color: #991b1b;
+    }
+    /* Schematic SVG styles */
+    #modal-schematic svg {
+      width: 100%;
+      height: 400px;
+      background: #f0fdfa;
+      border-radius: 0.5rem;
+    }
+  </style>
+</head>
+<body class="antialiased">
+  <header class="bg-white shadow p-4 flex items-center gap-4">
+    <img src="logo.jpg" alt="Well-Tegra Data Solutions Logo" class="h-10 w-auto" />
+    <h1 class="text-2xl font-bold text-teal-700">Well-Tegra Data Solutions</h1>
+  </header>
+
+  <main class="p-6 max-w-7xl mx-auto relative z-10">
+    <p class="mb-4">This demo app showcases well intervention planning with detailed well data, intervention history, and procedures.</p>
+
+    <!-- Well Status Filter -->
+    <div class="mb-4 flex flex-wrap gap-4 items-center">
+      <label for="well-status-filter" class="font-semibold">Filter Wells by Status:</label>
+      <select id="well-status-filter" class="border rounded p-2">
+        <option value="all">All</option>
+        <option value="Active - Underperforming">Active - Underperforming</option>
+        <option value="Active - Low Injectivity">Active - Low Injectivity</option>
+        <option value="Shut-in">Shut-in</option>
+        <option value="P&A Candidate">P&A Candidate</option>
+      </select>
+
+      <label for="procedure-search" class="font-semibold ml-auto">Search Procedures:</label>
+      <input type="text" id="procedure-search" placeholder="Search procedures..." class="border rounded p-2 w-48" />
+    </div>
+
+    <!-- Wells List -->
+    <section>
+      <h2 class="text-xl font-semibold mb-2">Wells</h2>
+      <ul id="well-list" class="space-y-2"></ul>
+    </section>
+
+    <!-- Modal for Well Details -->
+    <div id="well-details-modal" class="modal-overlay hidden">
+      <div class="modal-container p-6 md:p-8 max-w-4xl">
+        <div class="flex justify-between items-center mb-4">
+          <h2 id="modal-well-name" class="text-3xl font-bold text-gray-900"></h2>
+          <button id="modal-close-btn" class="text-gray-400 hover:text-gray-600 text-3xl leading-none">&times;</button>
+        </div>
+        <hr class="mb-4" />
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div id="modal-schematic" class="bg-gray-100 rounded-lg p-4 border">
+            <!-- Schematic SVG will be rendered here -->
+          </div>
+          <div class="lg:col-span-2 overflow-y-auto max-h-[400px]">
+            <h3 class="text-xl font-semibold mb-2">Intervention History & Lessons Learned</h3>
+            <div id="modal-history" class="space-y-4"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Procedures Section -->
+    <section class="mt-12">
+      <h2 class="text-xl font-semibold mb-4">Intervention Procedures</h2>
+      <div id="procedures-list" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
+    </section>
+  </main>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const wellData = [
+        {
+          id: 'W001',
+          name: 'Gullfaks C-34',
+          field: 'Gullfaks',
+          type: 'Oil Producer',
+          depth: 2850,
+          status: 'Active - Underperforming',
+          issue: 'Suspected scale buildup in tubing.',
+          schematic: {
+            td: 2850,
+            casingShoe: 2800,
+            tubingShoe: 2770,
+            dhsv: 450,
+            perforation: { top: 2740, bottom: 2760 },
+            problemDepth: 2600,
+          },
+        },
+        {
+          id: 'W002',
+          name: 'Statfjord A-12',
+          field: 'Statfjord',
+          type: 'Water Injector',
+          depth: 3100,
+          status: 'Active - Low Injectivity',
+          issue: 'Possible perforation plugging.',
+          schematic: {
+            td: 3100,
+            casingShoe: 3050,
+            tubingShoe: 2970,
+            dhsv: 500,
+            perforation: { top: 2940, bottom: 2960 },
+            problemDepth: 2950,
+          },
+        },
+      ];
+
+      const interventionHistoryData = {
+        W001: [
+          {
+            date: '2023-05-12',
+            type: 'Slickline',
+            summary: 'Memory production log run.',
+            problem: 'Logging tool string failed to pass 2590m.',
+            lesson: 'Potential obstruction or scale buildup identified. Confirmed with impression block.',
+          },
+        ],
+        W002: [
+          {
+            date: '2024-01-20',
+            type: 'Matrix Acidizing',
+            summary: '15% HCl acid stimulation to improve injectivity.',
+            problem: 'Higher than expected breakdown pressure observed.',
+            lesson: 'Suspect near-wellbore plugging is more severe than modeled. Future jobs should plan for higher pump pressures.',
+          },
+        ],
+      };
+
+      const proceduresData = {
+        obj1: {
+          name: 'Coiled Tubing Acid Stimulation',
+          steps: [
+            'Rig up Coiled Tubing unit.',
+            'Run in hole with jetting nozzle BHA.',
+            'Spot stimulation fluid across perforations.',
+            'Pull out of hole.',
+            'Flow back well and monitor production.',
+          ],
+          tooling: [
+            'Coiled Tubing Unit',
+            'High-Pressure Pumps',
+            'Fluid Tanks',
+            'Jetting Nozzle BHA',
+            'Wellhead Pressure Control',
+          ],
+          risks: {
+            operational: 4,
+            geological: 2,
+            equipment: 3,
+            hse: 3,
+            financial: 2,
+          },
+          cost: 450000,
+          duration: 4,
+        },
+        obj2: {
+          name: 'Mechanical Plug Installation',
+          steps: [
+            'Rig up Wireline unit.',
+            'Run in hole with gauge ring to confirm drift.',
+            'Run in hole with bridge plug and set at target depth.',
+            'Dump bail cement on top of plug.',
+            'Pressure test to confirm seal.',
+          ],
+          tooling: [
+            'Wireline Truck/Skid',
+            'Pressure Control Equipment (Lubricator)',
+            'Setting Tool for Bridge Plug',
+            'Gauge Rings',
+            'Dump Bailer',
+          ],
+          risks: {
+            operational: 2,
+            geological: 1,
+            equipment: 2,
+            hse: 2,
+            financial: 1,
+          },
+          cost: 250000,
+          duration: 3,
+        },
+      };
+
+      const wellListEl = document.getElementById('well-list');
+      const wellStatusFilter = document.getElementById('well-status-filter');
+      const procedureSearchInput = document.getElementById('procedure-search');
+      const proceduresListEl = document.getElementById('procedures-list');
+
+      const modal = document.getElementById('well-details-modal');
+      const modalCloseBtn = document.getElementById('modal-close-btn');
+      const modalWellName = document.getElementById('modal-well-name');
+      const modalHistory = document.getElementById('modal-history');
+      const modalSchematic = document.getElementById('modal-schematic');
+
+      function renderWells(filterStatus = 'all') {
+        wellListEl.innerHTML = '';
+        const filteredWells = filterStatus === 'all' ? wellData : wellData.filter(w => w.status === filterStatus);
+        filteredWells.forEach(well => {
+          const li = document.createElement('li');
+          li.className = 'p-4 bg-white rounded shadow cursor-pointer hover:bg-teal-50';
+          li.textContent = `${well.name} (${well.field}) - ${well.status}`;
+          li.title = `Issue: ${well.issue}`;
+          li.addEventListener('click', () => openWellModal(well));
+          wellListEl.appendChild(li);
+        });
+      }
+
+      function openWellModal(well) {
+        modalWellName.textContent = `${well.name} (${well.field})`;
+        modalHistory.innerHTML = '';
+        const history = interventionHistoryData[well.id] || [];
+        if (history.length === 0) {
+          modalHistory.innerHTML = '<p class="text-gray-600">No intervention history available.</p>';
+        } else {
+          history.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'border-l-4 border-teal-600 pl-4';
+            div.innerHTML = `
+              <p><strong>Date:</strong> ${item.date}</p>
+              <p><strong>Type:</strong> ${item.type}</p>
+              <p><strong>Summary:</strong> ${item.summary}</p>
+              <p><strong>Problem:</strong> ${item.problem}</p>
+              <p><strong>Lesson Learned:</strong> ${item.lesson}</p>
+            `;
+            modalHistory.appendChild(div);
+          });
+        }
+        renderSchematic(well.schematic);
+        modal.classList.remove('hidden');
+        modal.classList.add('visible');
+      }
+
+      function closeModal() {
+        modal.classList.remove('visible');
+        modal.classList.add('hidden');
+        modalSchematic.innerHTML = '';
+      }
+
+      modalCloseBtn.addEventListener('click', closeModal);
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+      });
+
+      function renderSchematic(schematic) {
+        const heightPx = 400;
+        const widthPx = 150;
+        const maxDepth = schematic.td;
+        const scale = heightPx / maxDepth;
+
+        modalSchematic.innerHTML = '';
+
+        const svgNS = "http://www.w3.org/2000/svg";
+        const svg = document.createElementNS(svgNS, 'svg');
+        svg.setAttribute('width', '100%');
+        svg.setAttribute('height', heightPx);
+        svg.setAttribute('viewBox', `0 0 ${widthPx} ${heightPx}`);
+
+        const bgRect = document.createElementNS(svgNS, 'rect');
+        bgRect.setAttribute('x', 0);
+        bgRect.setAttribute('y', 0);
+        bgRect.setAttribute('width', widthPx);
+        bgRect.setAttribute('height', heightPx);
+        bgRect.setAttribute('fill', '#f0fdfa');
+        svg.appendChild(bgRect);
+
+        for (let d = 0; d <= maxDepth; d += 500) {
+          const y = d * scale;
+          const line = document.createElementNS(svgNS, 'line');
+          line.setAttribute('x1', 30);
+          line.setAttribute('y1', y);
+          line.setAttribute('x2', 40);
+          line.setAttribute('y2', y);
+          line.setAttribute('stroke', '#666');
+          line.setAttribute('stroke-width', 1);
+          svg.appendChild(line);
+
+          const text = document.createElementNS(svgNS, 'text');
+          text.setAttribute('x', 25);
+          text.setAttribute('y', y + 4);
+          text.setAttribute('font-size', '10');
+          text.setAttribute('fill', '#444');
+          text.setAttribute('text-anchor', 'end');
+          text.textContent = `${d}m`;
+          svg.appendChild(text);
+        }
+
+        const casingWidth = 40;
+        const casingX = 60;
+        const casingY = 0;
+        const casingHeight = heightPx;
+        const casingRect = document.createElementNS(svgNS, 'rect');
+        casingRect.setAttribute('x', casingX);
+        casingRect.setAttribute('y', casingY);
+        casingRect.setAttribute('width', casingWidth);
+        casingRect.setAttribute('height', casingHeight);
+        casingRect.setAttribute('fill', '#a7f3d0');
+        casingRect.setAttribute('stroke', '#059669');
+        casingRect.setAttribute('stroke-width', 2);
+        svg.appendChild(casingRect);
+
+        const casingTitle = document.createElementNS(svgNS, 'title');
+        casingTitle.textContent = 'Casing';
+        casingRect.appendChild(casingTitle);
+
+        const casingShoeY = schematic.casingShoe * scale;
+        const casingShoeHeight = heightPx - casingShoeY;
+        const casingShoeRect = document.createElementNS(svgNS, 'rect');
+        casingShoeRect.setAttribute('x', casingX);
+        casingShoeRect.setAttribute('y', casingShoeY);
+        casingShoeRect.setAttribute('width', casingWidth);
+        casingShoeRect.setAttribute('height', casingShoeHeight);
+        casingShoeRect.setAttribute('fill', '#059669');
+        casingShoeRect.setAttribute('opacity', 0.3);
+        svg.appendChild(casingShoeRect);
+
+        const casingShoeTitle = document.createElementNS(svgNS, 'title');
+        casingShoeTitle.textContent = `Casing Shoe at ${schematic.casingShoe}m`;
+        casingShoeRect.appendChild(casingShoeTitle);
+
+        const tubingWidth = 20;
+        const tubingX = casingX + (casingWidth - tubingWidth) / 2;
+        const tubingY = 0;
+        const tubingHeight = heightPx;
+        const tubingRect = document.createElementNS(svgNS, 'rect');
+        tubingRect.setAttribute('x', tubingX);
+        tubingRect.setAttribute('y', tubingY);
+        tubingRect.setAttribute('width', tubingWidth);
+        tubingRect.setAttribute('height', tubingHeight);
+        tubingRect.setAttribute('fill', '#bae6fd');
+        tubingRect.setAttribute('stroke', '#3b82f6');
+        tubingRect.setAttribute('stroke-width', 1.5);
+        svg.appendChild(tubingRect);
+
+        const tubingTitle = document.createElementNS(svgNS, 'title');
+        tubingTitle.textContent = 'Tubing';
+        tubingRect.appendChild(tubingTitle);
+
+        const tubingShoeY = schematic.tubingShoe * scale;
+        const tubingShoeHeight = heightPx - tubingShoeY;
+        const tubingShoeRect = document.createElementNS(svgNS, 'rect');
+        tubingShoeRect.setAttribute('x', tubingX);
+        tubingShoeRect.setAttribute('y', tubingShoeY);
+        tubingShoeRect.setAttribute('width', tubingWidth);
+        tubingShoeRect.setAttribute('height', tubingShoeHeight);
+        tubingShoeRect.setAttribute('fill', '#3b82f6');
+        tubingShoeRect.setAttribute('opacity', 0.3);
+        svg.appendChild(tubingShoeRect);
+
+        const tubingShoeTitle = document.createElementNS(svgNS, 'title');
+        tubingShoeTitle.textContent = `Tubing Shoe at ${schematic.tubingShoe}m`;
+        tubingShoeRect.appendChild(tubingShoeTitle);
+
+        const perfTopY = schematic.perforation.top * scale;
+        const perfBottomY = schematic.perforation.bottom * scale;
+        const perfHeight = perfBottomY - perfTopY;
+        const perfRect = document.createElementNS(svgNS, 'rect');
+        perfRect.setAttribute('x', casingX);
+        perfRect.setAttribute('y', perfTopY);
+        perfRect.setAttribute('width', casingWidth);
+        perfRect.setAttribute('height', perfHeight);
+        perfRect.setAttribute('fill', '#facc15');
+        perfRect.setAttribute('opacity', 0.4);
+        svg.appendChild(perfRect);
+
+        const perfTitle = document.createElementNS(svgNS, 'title');
+        perfTitle.textContent = `Perforation Interval: ${schematic.perforation.top}m to ${schematic.perforation.bottom}m`;
+        perfRect.appendChild(perfTitle);
+
+        const dhsvY = schematic.dhsv * scale;
+        const dhsvCircle = document.createElementNS(svgNS, 'circle');
+        dhsvCircle.setAttribute('cx', tubingX + tubingWidth / 2);
+        dhsvCircle.setAttribute('cy', dhsvY);
+        dhsvCircle.setAttribute('r', 8);
+        dhsvCircle.setAttribute('fill', '#ef4444');
+        dhsvCircle.setAttribute('stroke', '#b91c1c');
+        dhsvCircle.setAttribute('stroke-width', 2);
+        svg.appendChild(dhsvCircle);
+
+        const dhsvTitle = document.createElementNS(svgNS, 'title');
+        dhsvTitle.textContent = `DHSV at ${schematic.dhsv}m`;
+        dhsvCircle.appendChild(dhsvTitle);
+
+        const dhsvLabel = document.createElementNS(svgNS, 'text');
+        dhsvLabel.setAttribute('x', tubingX + tubingWidth + 10);
+        dhsvLabel.setAttribute('y', dhsvY + 4);
+        dhsvLabel.setAttribute('font-size', '12');
+        dhsvLabel.setAttribute('fill', '#b91c1c');
+        dhsvLabel.textContent = 'DHSV';
+        svg.appendChild(dhsvLabel);
+
+        const problemY = schematic.problemDepth * scale;
+        const problemLine = document.createElementNS(svgNS, 'line');
+        problemLine.setAttribute('x1', casingX - 10);
+        problemLine.setAttribute('y1', problemY);
+        problemLine.setAttribute('x2', casingX + casingWidth + 10);
+        problemLine.setAttribute('y2', problemY);
+        problemLine.setAttribute('stroke', '#dc2626');
+        problemLine.setAttribute('stroke-dasharray', '6 4');
+        problemLine.setAttribute('stroke-width', 2);
+        svg.appendChild(problemLine);
+
+        const problemTitle = document.createElementNS(svgNS, 'title');
+        problemTitle.textContent = `Problem Depth at ${schematic.problemDepth}m`;
+        problemLine.appendChild(problemTitle);
+
+        const problemLabel = document.createElementNS(svgNS, 'text');
+        problemLabel.setAttribute('x', casingX + casingWidth + 15);
+        problemLabel.setAttribute('y', problemY + 4);
+        problemLabel.setAttribute('font-size', '12');
+        problemLabel.setAttribute('fill', '#dc2626');
+        problemLabel.textContent = 'Problem Depth';
+        svg.appendChild(problemLabel);
+
+        modalSchematic.appendChild(svg);
+      }
+
+      renderWells();
+
+      wellStatusFilter.addEventListener('change', () => {
+        renderWells(wellStatusFilter.value);
+      });
+
+      procedureSearchInput.addEventListener('input', () => {
+        // For simplicity, no procedure filtering here
+      });
+    });
+  </script>
+</body>
+</html>
+```
+
+---
+
